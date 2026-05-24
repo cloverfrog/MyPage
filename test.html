@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>展示页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+</head>
+<body>
+    <header class="border-b border-gray-200 p-4">
+        <div x-data class="mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button x-on:click="window.updateDatabase()"
+                x-bind:disabled="$store.updating"
+                class="inline-flex items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 active:scale-95 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 cursor-pointer">
+                更新
+            </button>
+        </div>
+    </header>
+    <div class="mx-auto max-w-full px-4 py-4">
+        <div x-data="{ notes: [] }" class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
+            <template x-for="note in $store.notes">
+                <a x-bind:href="note.url" class="group">
+                    <img x-bind:src="note.cover" alt="" class="aspect-[3/4] w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75" />
+                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900"></p>
+                </a>
+            </template>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('notes', [
+                {
+                    "title": "The Dark Knight",
+                    "url": "https://www.imdb.com/title/tt0468569/",
+                    "cover": "https://m.media-amazon.com/images/M/MV5BMTMxNTMwODM0NF5BMl5BanBnXkFtZTcwODAyMTk2Mw@@._V1_.jpg"
+                },
+                {
+                    "title": "Inception",
+                    "url": "https://www.imdb.com/title/tt1375666/",
+                    "cover": "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_.jpg"
+                },
+                {
+                    "title": "Hollow Knight",
+                    "url": "#",
+                    "cover": "367520_39.jpg"
+                }
+            ]);
+            Alpine.store('updating', false);
+        });
+
+        window.updateDatabase = function() {
+            Swal.fire({
+                title: "确定要更新数据库吗，可能需要一点时间?",
+                showCancelButton: true,
+                confirmButtonText: "确定",
+                cancelButtonText: "取消",
+                progressSteps: 
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire("Saved!", "", "success");
+                    Alpine.store('updating', true);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
