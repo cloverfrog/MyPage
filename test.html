@@ -15,7 +15,7 @@
             <button x-on:click="window.updateDatabase()"
                 x-bind:disabled="$store.updating"
                 class="inline-flex items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 active:scale-95 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 cursor-pointer">
-                更新
+                <span x-text="$store.updating ? '等待' : '更新'"></span>
             </button>
         </div>
     </header>
@@ -59,10 +59,16 @@
                 showCancelButton: true,
                 confirmButtonText: "确定",
                 cancelButtonText: "取消"
-            }).then((result) => {
+            }).then(async (result) => {
                 if (result.isConfirmed) {
-                    Swal.fire("Saved!", "", "success");
                     Alpine.store('updating', true);
+                    const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书/";
+                    const response = await fetch(resourcesPath, { headers: { "Accept": "application/json"} });
+                    let pas = await response.json();
+                    pas = pas
+                        .filter(e => e.is_dir && e.name.includes("-"))
+                        .map(e => e.name.slice(0, -1));
+                    
                 }
             });
         }
