@@ -22,9 +22,17 @@
     <div class="mx-auto max-w-full px-4 py-4">
         <div x-data="{ notes: [] }" class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
             <template x-for="note in $store.notes">
-                <a x-bind:href="note.url" class="group">
-                    <img x-bind:src="note.cover" alt="" class="aspect-[3/4] w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75" />
-                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900"></p>
+                <a x-bind:href="note.url" class="group relative">
+                    <img x-bind:src="note.cover" loading="lazy" alt="" class="aspect-[3/4] w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75" />
+                    <div class="absolute top-0 right-0 flex gap-0.5 p-1 z-10">
+                        <span class="w-5 h-5 ">
+                             <img x-bind:src="`/icons/${note.platform}.svg`" class="w-5 h-5">
+                        </span>
+                        <span class="w-5 h-5 ">
+                             <img x-bind:src="`/icons/${note.type}.svg`" class="w-5 h-5">
+                        </span>
+                    </div>
+                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900 truncate"></p>
                 </a>
             </template>
         </div>
@@ -32,25 +40,26 @@
     </div>
 
     <script>
+        const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书/";
+        
         document.addEventListener('alpine:init', () => {
-            Alpine.store('notes', [
-                {
-                    "title": "The Dark Knight",
-                    "url": "https://www.imdb.com/title/tt0468569/",
-                    "cover": "https://m.media-amazon.com/images/M/MV5BMTMxNTMwODM0NF5BMl5BanBnXkFtZTcwODAyMTk2Mw@@._V1_.jpg"
-                },
-                {
-                    "title": "Inception",
-                    "url": "https://www.imdb.com/title/tt1375666/",
-                    "cover": "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_.jpg"
-                },
-                {
-                    "title": "Hollow Knight",
-                    "url": "#",
-                    "cover": "367520_39.jpg"
-                }
-            ]);
             Alpine.store('updating', false);
+            async function loadNotes() {
+                const PocketBase = (await import('https://unpkg.com/pocketbase/dist/pocketbase.es.mjs')).default;
+                const pb = new PocketBase('http://100.69.1.1:40329');
+                const records = await pb.collection('dyxhs').getFullList({
+                    filter: 'author = "吃一口鹿崽"',
+                    sort: '-time',
+                });
+                Alpine.store('notes', records.map(e => ({
+                    title: e.title,
+                    url: "#", 
+                    cover: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${e.cover}`,
+                    platform: e.platform,
+                    type: {"normal": "图文", "video": "视频"}[e.type]
+                })));
+            }
+            loadNotes();
         });
 
         window.updateDatabase = function() {
@@ -62,13 +71,78 @@
             }).then(async (result) => {
                 if (result.isConfirmed) {
                     Alpine.store('updating', true);
-                    const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书/";
-                    const response = await fetch(resourcesPath, { headers: { "Accept": "application/json"} });
-                    let pas = await response.json();
-                    pas = pas
-                        .filter(e => e.is_dir && e.name.includes("-"))
-                        .map(e => e.name.slice(0, -1));
-                    
+
+                    try {
+                        // 获取数据库
+                        const PocketBase = (await import('https://unpkg.com/pocketbase/dist/pocketbase.es.mjs')).default;
+                        const pb = new PocketBase('http://100.69.1.1:40329');
+                        const records = await pb.collection('dyxhs').getFullList({});
+                        console.log("数据库:", records);
+                        const id_set = new Set(records.map(e => e.note_id));
+
+                        // 获取资源
+                        const response = await fetch(resourcesPath, { headers: { "Accept": "application/json"} });
+                        let pas = await response.json();    //pa指platform-author
+                        pas = pas
+                            .filter(e => e.is_dir && e.name.includes("-"))
+                            .map(e => e.name.slice(0, -1));
+                        console.log("从抖音小红书拿到的文件列表:", pas);
+                        let count = 0;
+                        for(let pa of pas) {
+                            console.log("正在处理:", pa);
+                            const response = await fetch(`${resourcesPath}/${pa}`, { headers: { "Accept": "application/json"} });
+                            const ids = await response.json();
+                            const new_notes = ids
+                                .map(e => e.name.slice(0, -1))
+                                .filter(e => !id_set.has(e));
+
+                            if(new_notes.length > 0) {
+                                const [platform, author] = pa.split("-");
+                                for(let id of new_notes) {
+                                    const response = await fetch(`${resourcesPath}/${pa}/${id}/${id}.json`, { headers: { "Accept": "application/json"} });
+                                    const data = await response.json();
+
+                                    let item = {}
+                                    item.note_id = id;
+                                    item.platform = platform;
+                                    item.author = author;
+                                    if(platform === "抖音") {
+                                        item.title = data.desc;
+                                        item.desc = "";
+                                        item.time = new Date(data.create_time*1000);
+                                        item.type = (data.media_type === 2 || data.media_type === 42) ? "normal" : "video";
+                                        item.cover = data.cover;
+                                        item.images = data.images?.map(e => ({live_photo: true, image: e.cover, video: e.video})) ?? [];
+                                        item.video = data.video ?? "";
+                                    } else if(platform === "小红书") {
+                                        item.title = data.title;
+                                        item.desc = data.desc;
+                                        item.time = new Date(data.time);
+                                        item.type = data.type;
+                                        item.cover = data.cover;
+                                        item.images = data.image_list ?? [];
+                                        item.video = data.video ?? "";
+                                    } else if(platform === "快手") {
+                                        item.title = data.caption;
+                                        item.desc = "";
+                                        item.time = new Date(data.timestamp);
+                                        item.type = "normal";
+                                        item.cover = data.cover;
+                                        item.images = data.images.map(e => ({live_photo: false, image: e, video: ""})) ?? [];
+                                        item.video = "";
+                                    }
+                                    await pb.collection('dyxhs').create(item);
+                                    count++;
+                                }
+                            }
+                        }
+                        Swal.fire("更新成功", "共更新 " + count + " 条数据", "success");
+                    } catch(e) {
+                        console.error(e);
+                        Swal.fire("更新失败", e.message, "error");
+                    } finally {
+                        Alpine.store('updating', false);
+                    }
                 }
             });
         }
