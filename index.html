@@ -2,37 +2,25 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>我的局域网媒体库</title>
-    <!-- 1. 通过 CDN 引入 PocketBase SDK (这里用的是目前主流的稳定版，开箱即用) -->
-    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <title>我的ss世界</title>
 </head>
 <body>
-    <h1>我的海报墙</h1>
-    <button onclick="syncLocalMedia()">同步新资源</button>
-    <br><a href="test.html">test</a>
-    <br><a href="test1.html">test1</a>
+    <h1>我的ss世界</h1>
+    <h2>抖音小红书</h2>
+    <ul id="dyxhs">
+        <li><a href="dyxhs.html?author=吃一口鹿崽">吃一口鹿崽</a></li>
+        <li><a href="dyxhs.html?author=小白白">小白白</a></li>
+        <li><a href="dyxhs.html?author=小饱">小饱</a></li>
+        <li><a href="dyxhs.html?author=小徐睡醒了">小徐睡醒了</a></li>
+        <li><a href="dyxhs.html?author=xXin">xXin</a></li>
+        <li><a href="dyxhs.html?author=iik">iik</a></li>
+        <li><a href="dyxhs.html?author=请再努力一点好吗">请再努力一点好吗</a></li>
+        <li><a href="dyxhs.html?author=CMMX">CMMX</a></li>
+    </ul>
+
+    <a href="test.html">测试</a>
 
     <script>
-        // 2. 直接初始化，不需要任何 import 语句
-        // 别忘了我们用了 Caddy 做反向代理，所以前端直接写相对路径 '/api/' 即可
-        const pb = new PocketBase('http://100.69.1.1:40329');
-
-        async function loadMovies() {
-            try {
-                // 3. 像官方文档一样爽快地调用 API
-                const records = await pb.collection('dyxhs').getFullList({
-                    sort: '-time', // 按时间倒序
-                });
-                
-                console.log("从 PocketBase 拿到的结构化数据:", records);
-                // 接下来你就可以用 DOM 操作把 records 渲染成漂亮的网页了
-            } catch (err) {
-                console.error("加载失败:", err);
-            }
-        }
-
-        // 页面加载时自动运行
-        loadMovies();
     </script>
 </body>
 </html>

@@ -1,188 +1,75 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>展示页</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>功能测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
 </head>
+
 <body>
-    <header class="border-b border-gray-200 p-4">
-        <div x-data class="mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <button x-on:click="window.updateDatabase()"
-                x-bind:disabled="$store.updating"
-                class="inline-flex items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 active:scale-95 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 cursor-pointer">
-                <span x-text="$store.updating ? '等待' : '更新'"></span>
-            </button>
-        </div>
-    </header>
-    <div class="mx-auto max-w-full px-4 py-4">
-        <div x-data class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
-            <template x-for="note in $store.notes">
-                <a x-bind:href="note.url" class="group relative">
-                    <img x-bind:src="note.cover" loading="lazy" alt="" class="aspect-[3/4] w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75" />
-                    <div class="absolute top-0 right-0 flex gap-0.5 p-1 z-10">
-                        <span class="w-5 h-5 ">
-                             <img x-bind:src="`/icons/${note.platform}.svg`" class="w-5 h-5">
-                        </span>
-                        <span class="w-5 h-5 ">
-                             <img x-bind:src="`/icons/${note.type}.svg`" class="w-5 h-5">
-                        </span>
-                    </div>
-                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900 truncate"></p>
-                </a>
-            </template>
-        </div>
-    </div>
-    </div>
+    <button class="btn" onclick="deleteFilteredRecords()">open modal</button>
 
     <script>
-        const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书";
         const pbPath = "http://100.69.1.1:40329";
         const pb = new PocketBase(pbPath);
 
-        async function getNotesData(filter, sort, forceRefresh = false) {
-            const CACHE_EXPIRE = 259200000; 
-            const cacheKey = `pb_cache_${btoa(unescape(encodeURIComponent(filter + '_' + sort)))}`;
-
-            if (!forceRefresh) {
-                const localCache = localStorage.getItem(cacheKey);
-                if (localCache) {
-                    try {
-                        const { timestamp, data } = JSON.parse(localCache);
-                        if (Date.now() - timestamp < CACHE_EXPIRE) {
-                            return data;
-                        }
-                    } catch (e) {
-                        localStorage.removeItem(cacheKey);
-                    }
-                }
-            }
-
-            const records = await pb.collection('dyxhs').getFullList({ filter, sort });
-            localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: records }));
-            return records;
-        }
-        
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('updating', false);
-            Alpine.store('notes', []);
-            async function loadNotes() {
-                const records = await getNotesData('author = "吃一口鹿崽"', '-time');
-                Alpine.store('notes', records.map(e => ({
-                    title: e.title,
-                    url: "#", 
-                    cover: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${e.cover}`,
-                    platform: e.platform,
-                    type: {"normal": "图文", "video": "视频"}[e.type]
-                })));
-            }
-            loadNotes();
-        });
-
-        window.updateDatabase = function() {
-        Swal.fire({
-            title: "确定要更新数据库吗吗？",
-            text: "这可能要花费一些时间",
-            icon: "question",
-            showCancelButton: true
-        }).then(async (result) => {
-            if (!result.isConfirmed) return;
-
-            Alpine.store('updating', true);
-            Swal.fire({ title: '正在检索本地资源...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-
+        async function deleteFilteredRecords(collectionName = 'dyxhs', filterStr = 'platform = "抖音"', concurrencyLimit = 5) {
             try {
-                // 获取本地及数据库索引
-                const records = await pb.collection('dyxhs').getFullList({ fields: 'note_id' });
-                const id_set = new Set(records.map(e => e.note_id));
+                // 1. 先查出所有需要删除的 ID
+                const records = await pb.collection(collectionName).getFullList({
+                    filter: filterStr,
+                    fields: 'id',
+                });
 
-                const response = await fetch(resourcesPath, { headers: { "Accept": "application/json"} });
-                const pas = (await response.json()).filter(e => e.is_dir && e.name.includes("-")).map(e => e.name.replace(/\/$/, ''));
+                if (records.length === 0) {
+                    console.log('没有找到匹配的数据');
+                    return;
+                }
 
-                let updateTasks = [];
-                for(let pa of pas) {
-                    const res = await fetch(`${resourcesPath}/${encodeURIComponent(pa)}`, { headers: { "Accept": "application/json"} });
-                    const ids = await res.json();
-                    const [platform, author] = pa.split("-");
-                    const new_notes = ids.map(e => e.name.replace(/\/$/, '')).filter(e => !id_set.has(e));
-                    
-                    for(let id of new_notes) {
-                        updateTasks.push({ pa, id, platform, author });
+                console.log(`共找到 ${records.length} 条数据，开始执行限制并发删除（限制数: ${concurrencyLimit}）...`);
+
+                // 2. 核心并发控制逻辑
+                const pool = new Set();
+                const promises = [];
+
+                for (const record of records) {
+                    // 创建单个删除任务
+                    const task = (async () => {
+                        try {
+                            await pb.collection(collectionName).delete(record.id);
+                        } catch (err) {
+                            console.error(`删除 ID: ${record.id} 失败`, err);
+                        }
+                    })();
+
+                    promises.push(task);
+                    pool.add(task);
+
+                    // 任务完成后，从并发池中移除自己
+                    task.then(() => pool.delete(task));
+
+                    // 如果并发池满了，就等待池子里最快的一个任务完成，再往下走循环
+                    if (pool.size >= concurrencyLimit) {
+                        await Promise.race(pool);
                     }
                 }
 
-                // =================【核心优化：分批解析并提交】=================
-                // 设定每批并发处理 15 条数据
-                const chunkSize = 15;
-                let successCount = 0;
-                let processCount = 0;
+                // 等待最后留在池子里的残余任务全部执行完毕
+                await Promise.all(promises);
+                console.log('所有筛选数据处理完毕！');
 
-                for (let i = 0; i < updateTasks.length; i+=chunkSize) {
-                    const chunk = updateTasks.slice(i, i + chunkSize);
-
-                    Swal.update({
-                        title: `更新进度 (${processCount}/${updateTasks.length})`
-                    });
-
-                    // 1. 并发请求当前批次内所有单条数据的 JSON
-                    const itemPromises = chunk.map(async (task) => {
-                        try {
-                            const resJson = await fetch(`${resourcesPath}/${encodeURIComponent(task.pa)}/${task.id}/${task.id}.json`);
-                            const data = await resJson.json();
-                            
-                            // 数据规范化组装
-                            let item = { note_id: task.id, platform: task.platform, author: task.author, video: data.video || "" };
-                            if(task.platform === "抖音") {
-                                item.title = data.desc || ""; item.desc = ""; item.time = new Date(data.create_time * 1000);
-                                item.type = (data.media_type === 2 || data.media_type === 42) ? "normal" : "video";
-                                item.cover = data.cover || ""; item.images = data.images?.map(e => ({live_photo: true, image: e.cover, video: e.video})) ?? [];
-                            } else if(task.platform === "小红书") {
-                                item.title = data.title || data.desc || ""; item.desc = data.desc || ""; item.time = new Date(data.time);
-                                item.type = data.type || "normal"; item.cover = data.cover || ""; item.images = data.image_list ?? [];
-                            } else if(task.platform === "快手") {
-                                item.title = data.caption || ""; item.desc = ""; item.time = new Date(data.timestamp);
-                                item.type = "normal"; item.cover = data.cover || ""; item.images = data.images?.map(e => ({live_photo: false, image: e, video: ""})) ?? [];
-                            }
-                            return item;
-                        } catch (err) {
-                            console.error(`解析JSON失败 [${task.id}]:`, err);
-                            return null; // 单条失败不影响整批
-                        } finally {
-                            processCount++;
-                        }
-                    });
-
-                    // 等待当前批次的所有 JSON 解析完成
-                    const itemsToCreate = (await Promise.all(itemPromises)).filter(el => el !== null);
-
-                    // 2. 并发向 PocketBase 写入当前批次的数据
-                    const pbPromises = itemsToCreate.map(item => 
-                        pb.collection('dyxhs').create(item)
-                            .then(() => { successCount++; })
-                            .catch(err => console.error(`写入数据库失败 [${item.note_id}]:`, err))
-                    );
-
-                    // 等待当前批次全部写入 PocketBase，再进入下一个循环批次
-                    await Promise.all(pbPromises);
-                }
-                // =============================================================
-
-                Swal.fire("更新完成", `添加 ${successCount} / ${updateTasks.length} 条数据！`, "success");
-                if (window.refreshNotes) window.refreshNotes();
-
-            } catch(e) {
-                console.error(e);
-                Swal.fire("更新异常", e.message, "error");
-            } finally {
-                Alpine.store('updating', false);
+            } catch (error) {
+                console.error('查询或执行中出错:', error);
             }
-        });
-    }
+        }
     </script>
 </body>
+
 </html>
