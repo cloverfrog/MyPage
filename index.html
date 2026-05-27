@@ -99,7 +99,7 @@
                                     item.type = (data.media_type === 2 || data.media_type === 42) ? "normal" : "video";
                                     item.cover = data.cover || "";
                                     if (data.media_type === 42) {
-                                        item.images = data.images?.map(e => ({ true, image: e.cover, video: e.video })) ?? [];
+                                        item.images = data.images?.map(e => ({ live_photo: true, image: e.cover, video: e.video })) ?? [];
                                     } else {
                                         item.images = data.images?.map(e => ({ live_photo: false, image: e, video: "" })) ?? [];
                                     }
