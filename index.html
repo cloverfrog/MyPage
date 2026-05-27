@@ -1,12 +1,24 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <title>我的ss世界</title>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
+
 <body>
     <h1>我的ss世界</h1>
+
     <h2>抖音小红书</h2>
+    <div x-data>
+        <button x-text="$store.updating ? '更新中...' : '更新数据库'" x-on:click="window.updateDyxhsDatabase()"
+            x-bind:disabled="$store.updating"></button>
+    </div>
+
     <ul id="dyxhs">
         <li><a href="dyxhs.html?author=吃一口鹿崽">吃一口鹿崽</a></li>
         <li><a href="dyxhs.html?author=小白白">小白白</a></li>
@@ -21,6 +33,128 @@
     <a href="test.html">测试</a>
 
     <script>
+        const pbPath = "http://100.69.1.1:40329";
+        const pb = new PocketBase(pbPath);
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('updating', false);
+        });
+
+        window.updateDyxhsDatabase = function () {
+            const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书";
+            Swal.fire({
+                title: "确定要更新数据库吗？",
+                text: "这可能要花费一些时间",
+                icon: "question",
+                showCancelButton: true
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+
+                Alpine.store('updating', true);
+                Swal.fire({ title: '正在检索本地资源...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+                try {
+                    // 获取本地及数据库索引
+                    const records = await pb.collection('dyxhs').getFullList({ fields: 'note_id' });
+                    const id_set = new Set(records.map(e => e.note_id));
+
+                    const response = await fetch(resourcesPath, { headers: { "Accept": "application/json" } });
+                    const pas = (await response.json()).filter(e => e.is_dir && e.name.includes("-")).map(e => e.name.replace(/\/$/, ''));
+
+                    let updateTasks = [];
+                    for (let pa of pas) {
+                        const res = await fetch(`${resourcesPath}/${encodeURIComponent(pa)}`, { headers: { "Accept": "application/json" } });
+                        const ids = await res.json();
+                        const [platform, author] = pa.split("-");
+                        const new_notes = ids.map(e => e.name.replace(/\/$/, '')).filter(e => !id_set.has(e));
+
+                        for (let id of new_notes) {
+                            updateTasks.push({ pa, id, platform, author });
+                        }
+                    }
+
+                    // =================【核心优化：分批解析并提交】=================
+                    // 设定每批并发处理 5 条数据
+                    const chunkSize = 1;
+                    let successCount = 0;
+                    let processCount = 0;
+
+                    for (let i = 0; i < updateTasks.length; i += chunkSize) {
+                        const chunk = updateTasks.slice(i, i + chunkSize);
+
+                        Swal.update({
+                            title: `更新进度 (${processCount}/${updateTasks.length})`
+                        });
+
+                        // 1. 并发请求当前批次内所有单条数据的 JSON
+                        const itemPromises = chunk.map(async (task) => {
+                            try {
+                                const resJson = await fetch(`${resourcesPath}/${encodeURIComponent(task.pa)}/${task.id}/${task.id}.json`);
+                                const data = await resJson.json();
+
+                                // 数据规范化组装
+                                let item = { note_id: task.id, platform: task.platform, author: task.author, video: data.video || "" };
+                                if (task.platform === "抖音") {
+                                    item.title = data.desc || ""; item.desc = ""; item.time = new Date(data.create_time * 1000);
+                                    item.type = (data.media_type === 2 || data.media_type === 42) ? "normal" : "video";
+                                    item.cover = data.cover || "";
+                                    if (data.media_type === 42) {
+                                        item.images = data.images?.map(e => ({ true, image: e.cover, video: e.video })) ?? [];
+                                    } else {
+                                        item.images = data.images?.map(e => ({ live_photo: false, image: e, video: "" })) ?? [];
+                                    }
+
+                                } else if (task.platform === "小红书") {
+                                    item.title = data.title || data.desc || ""; item.desc = data.desc || ""; item.time = new Date(data.time);
+                                    item.type = data.type || "normal"; item.cover = data.cover || ""; item.images = data.image_list ?? [];
+                                } else if (task.platform === "快手") {
+                                    item.title = data.caption || ""; item.desc = ""; item.time = new Date(data.timestamp);
+                                    item.type = "normal"; item.cover = data.cover || "";
+                                    item.images = data.images?.map(e => ({ live_photo: false, image: e, video: "" })) ?? [];
+                                }
+                                return item;
+                            } catch (err) {
+                                console.error(`解析JSON失败 [${task.id}]:`, err);
+                                return null; // 单条失败不影响整批
+                            } finally {
+                                processCount++;
+                            }
+                        });
+
+                        // 等待当前批次的所有 JSON 解析完成
+                        const itemsToCreate = (await Promise.all(itemPromises)).filter(el => el !== null);
+
+                        // 2. 并发向 PocketBase 写入当前批次的数据
+                        const pbPromises = itemsToCreate.map(item =>
+                            pb.collection('dyxhs').create(item)
+                                .then(() => { successCount++; })
+                                .catch(err => console.error(`写入数据库失败 [${item.note_id}]:`, err))
+                        );
+
+                        // 等待当前批次全部写入 PocketBase，再进入下一个循环批次
+                        await Promise.all(pbPromises);
+                    }
+                    // =============================================================
+
+                    Swal.fire("更新完成", `添加 ${successCount} / ${updateTasks.length} 条数据！`, "success");
+
+                    // 更新完成后清理相关缓存（如果有的话）
+                    if(successCount > 0) {
+                        for (let key in localStorage) {
+                            if (key.startsWith('dyxhs_cache_')) {
+                                localStorage.removeItem(key);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                    Swal.fire("更新异常", e.message, "error");
+                } finally {
+                    Alpine.store('updating', false);
+                }
+            });
+        }
     </script>
 </body>
+
 </html>

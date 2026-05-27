@@ -11,16 +11,14 @@
     <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/artplayer@latest/dist/artplayer.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/viewerjs@1.11.6/dist/viewer.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/viewerjs@1.11.6/dist/viewer.min.js"></script>
 </head>
 
-<body>
+<body class="bg-base-200 dark:bg-gray-950 text-gray-900 dark:text-gray-100 min-h-screen">
     <!-- 顶部工具栏 -->
     <header class="border-b border-gray-200 p-4">
-        <div x-data class="navbar bg-base-100 shadow-sm">
-            <button x-text="$store.updating ? '等待' : '更新'" x-on:click="window.updateDatabase()"
-                x-bind:disabled="$store.updating" class="btn"></button>
-            <button class="btn">刷新缓存</button>
-        </div>
     </header>
 
     <!-- 卡片展示 -->
@@ -28,7 +26,6 @@
         <div x-data
             class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
             <template x-for="note in $store.notes">
-                <!-- <a x-bind:href="note.url" class="group relative"> -->
                 <div x-on:click="$store.activeNote = note;console.log($store.activeNote)" class="group relative">
                     <img x-bind:src="note.cover" loading="lazy" alt=""
                         class="aspect-[3/4] w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75" />
@@ -40,54 +37,77 @@
                             <img x-bind:src="`/icons/${note.type}.svg`" class="w-5 h-5">
                         </span>
                     </div>
-                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900 truncate"></p>
+                    <p x-text="note.title" class="mt-1 text-lg font-medium text-gray-900 truncate dark:text-white"></p>
                 </div>
-                <!-- </a> -->
             </template>
         </div>
     </div>
 
-    <div x-data x-show="$store.activeNote.title"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate__animated animate__fadeIn"
-        x-on:keydown.escape.window="$store.activeNote = {}">
+    <!-- 模态框 -->
+    <div x-data x-show="Object.keys($store.activeNote).length !== 0"
+        :class="{ 'modal-open': Object.keys($store.activeNote).length !== 0 }"
+        class="modal modal-open max-w-full bg-black/60 backdrop-blur-sm animate__animated animate__fadeIn"
+        display="none" x-on:keydown.escape.window="$store.activeNote = {}">
 
-        <div class="absolute inset-0" x-on:click="$store.activeNote = {}"></div>
+        <!-- 背景遮罩 -->
+        <div class="absolute inset-0 cursor-pointer" x-on:click="$store.activeNote = {}"></div>
 
         <div
-            class="relative bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate__animated animate__zoomIn animate__faster">
+            class="modal-box relative p-0 max-w-full max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl animate__animated animate__zoomIn animate__faster">
 
-            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
+            <!-- 模态框头部 -->
+            <div
+                class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 bg-base-100 dark:bg-gray-900">
                 <div class="flex items-center gap-2 truncate pr-4">
-                    <span
-                        class="px-2 py-0.5 text-xs font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                        x-text="$store.activeNote.platform"></span>
+                    <span class="badge badge-neutral font-bold" x-text="$store.activeNote.platform"></span>
                     <h2 class="text-lg font-bold truncate text-gray-900 dark:text-white"
                         x-text="$store.activeNote.title"></h2>
                 </div>
-                <button x-on:click="$store.activeNote = {}"
-                    class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 cursor-pointer transition-all">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <button x-on:click="$store.activeNote = {}" class="btn btn-sm btn-circle btn-ghost">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
 
-            <div class="p-6 overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-950">
+            <!-- 模态框内容 -->
+            <div class="p-6 overflow-y-auto flex-1 bg-base-200 dark:bg-gray-950">
 
+                <!-- 视频内容 -->
                 <template x-if="$store.activeNote.type === '视频'">
-                    <div
-                        class="w-full flex justify-center items-center bg-black rounded-xl overflow-hidden shadow-inner aspect-video max-h-[60vh]">
-                        <video x-bind:src="$store.activeNote.video" controls autoplay
-                            class="w-full h-full max-h-[60vh] object-contain"></video>
+                    <div x-init="initVideoPlayer($el, {url: $store.activeNote.video})"
+                        class="w-full aspect-square max-w-full max-h-[80vh] bg-neutral">
                     </div>
                 </template>
 
+                <!-- 图文内容 -->
                 <template x-if="$store.activeNote.type === '图文'">
-                    <div class="flex flex-col gap-6 items-center">
+                    <div
+                        class="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         <template x-for="(img, index) in $store.activeNote.images" :key="index">
-                            <div class="bg-white dark:bg-gray-900 p-2 rounded-xl shadow-sm max-w-lg w-full">
-                                <img x-bind:src="img.image" loading="lazy"
-                                    class="w-full rounded-lg object-contain h-auto max-h-[70vh]" alt="资源图片" />
+                            <div class="bg-base-100 p-2 rounded-xl shadow-sm max-w-lg w-full">
+                                <!-- live photo -->
+                                <template x-if="img.live_photo">
+                                    <div x-data="{ play_live: false }">
+                                        <template x-if="!play_live">
+                                            <img x-bind:src="img.image" loading="lazy"
+                                                class="w-full rounded-lg object-contain h-auto h-full" alt="资源图片"
+                                                x-on:click="play_live = true" />
+                                        </template>
+                                        <template x-if="play_live">
+                                            <div x-init="initVideoPlayer($el, {url: img.video})"
+                                                class="w-full aspect-square max-w-full max-h-[80vh] bg-neutral">
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <!-- 普通图片 -->
+                                <template x-if="!img.live_photo">
+                                        <img x-bind:src="img.image" loading="lazy"
+                                            x-on:click="viewImageAdvanced($el)"
+                                            class="w-full rounded-lg object-contain h-auto max-h-full" alt="资源图片" />
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -98,15 +118,16 @@
     </div>
 
     <script>
-        const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书";
         const pbPath = "http://100.69.1.1:40329";
         const pb = new PocketBase(pbPath);
+
+        const resourcesPath = "http://100.69.1.1:40328/media/抖音小红书";
 
         const urlSearchParams = new URLSearchParams(window.location.search);
 
         async function getNotesData(filter, sort, forceRefresh = false) {
             const CACHE_EXPIRE = 259200000;
-            const cacheKey = `pb_cache_${btoa(unescape(encodeURIComponent(filter + '_' + sort)))}`;
+            const cacheKey = `dyxhs_cache_${btoa(unescape(encodeURIComponent(filter + '_' + sort)))}`;
 
             if (!forceRefresh) {
                 const localCache = localStorage.getItem(cacheKey);
@@ -137,7 +158,11 @@
                 platform: e.platform,
                 type: { "normal": "图文", "video": "视频" }[e.type],
                 video: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${e.video}`,
-                images: e.images.map(i => ({ image: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${i.image}` }))
+                images: e.images.map(i => ({
+                    live_photo: i.live_photo,
+                    image: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${i.image}`,
+                    video: `${resourcesPath}/${e.platform}-${e.author}/${e.note_id}/${i.video}`
+                }))
             })));
         }
 
@@ -148,111 +173,88 @@
 
             loadNotes();
         });
+    </script>
 
-        window.updateDatabase = function () {
-            Swal.fire({
-                title: "确定要更新数据库吗？",
-                text: "这可能要花费一些时间",
-                icon: "question",
-                showCancelButton: true
-            }).then(async (result) => {
-                if (!result.isConfirmed) return;
+    <script>
+        /**
+         * 全局统一视频初始化函数（ArtPlayer 版）
+         * @param {HTMLElement} el - 当前的外层 div 容器 (即 Alpine 的 $el)
+         * @param {Object} customConfig - 单个视频的个性化配置（必须包含 url）
+         */
+        function initVideoPlayer(el, customConfig = {}) {
+            // 1. 统一的全局默认配置（改这里，全站生效）
+            const defaultConfig = {
+                container: el,           // 挂载点直接设为当前 div 元素
+                volume: 0.7,             // 默认音量
+                autoplay: false,         // 自动播放
+                loop: false,             // 循环播放
+                theme: '#2563eb',        // 播放器主题色（这里用了 Tailwind 的 blue-600）
 
-                Alpine.store('updating', true);
-                Swal.fire({ title: '正在检索本地资源...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                // 以下是 ArtPlayer 极其强大的内置控制条开关
+                setting: true,           // 开启右下角设置面板
+                playbackRate: true,      // 开启倍速播放
+                aspectRatio: false,       // 开启画面比例切换
+                fullscreen: true,        // 开启全屏按钮
+                fullscreenWeb: true,     // 开启网页样式全屏（移动端防黑屏流氓全屏的利器）
+                pip: false,               // 开启画中画
+                mutex: true,             // 多个播放器互斥（一个播放，另一个自动暂停）
 
-                try {
-                    // 获取本地及数据库索引
-                    const records = await pb.collection('dyxhs').getFullList({ fields: 'note_id' });
-                    const id_set = new Set(records.map(e => e.note_id));
+                // 快捷键配置
+                hotkey: true,
 
-                    const response = await fetch(resourcesPath, { headers: { "Accept": "application/json" } });
-                    const pas = (await response.json()).filter(e => e.is_dir && e.name.includes("-")).map(e => e.name.replace(/\/$/, ''));
+                // 移动端优化
+                miniProgressBar: true,   // 移动端未点开时显示迷你进度条
+                playsInline: true,       // 对应原生 playsinline
+            };
 
-                    let updateTasks = [];
-                    for (let pa of pas) {
-                        const res = await fetch(`${resourcesPath}/${encodeURIComponent(pa)}`, { headers: { "Accept": "application/json" } });
-                        const ids = await res.json();
-                        const [platform, author] = pa.split("-");
-                        const new_notes = ids.map(e => e.name.replace(/\/$/, '')).filter(e => !id_set.has(e));
+            // 2. 合并默认配置和个性化配置
+            const finalConfig = Object.assign({}, defaultConfig, customConfig);
 
-                        for (let id of new_notes) {
-                            updateTasks.push({ pa, id, platform, author });
-                        }
-                    }
+            player = new Artplayer(finalConfig);
 
-                    // =================【核心优化：分批解析并提交】=================
-                    // 设定每批并发处理 5 条数据
-                    const chunkSize = 1;
-                    let successCount = 0;
-                    let processCount = 0;
+            return player;
+        }
 
-                    for (let i = 0; i < updateTasks.length; i += chunkSize) {
-                        const chunk = updateTasks.slice(i, i + chunkSize);
+        /**
+         * 全局单张图片高级放大查看器
+         * @param {HTMLElement} imgEl - 原生 <img> 标签对象
+         */
+        function viewImageAdvanced(imgEl) {
+            // 如果这张图片已经绑定过查看器，直接获取并显示
+            if (imgEl._viewer) {
+                imgEl._viewer.show();
+                return;
+            }
 
-                        Swal.update({
-                            title: `更新进度 (${processCount}/${updateTasks.length})`
-                        });
-
-                        // 1. 并发请求当前批次内所有单条数据的 JSON
-                        const itemPromises = chunk.map(async (task) => {
-                            try {
-                                const resJson = await fetch(`${resourcesPath}/${encodeURIComponent(task.pa)}/${task.id}/${task.id}.json`);
-                                const data = await resJson.json();
-
-                                // 数据规范化组装
-                                let item = { note_id: task.id, platform: task.platform, author: task.author, video: data.video || "" };
-                                if (task.platform === "抖音") {
-                                    item.title = data.desc || ""; item.desc = ""; item.time = new Date(data.create_time * 1000);
-                                    item.type = (data.media_type === 2 || data.media_type === 42) ? "normal" : "video";
-                                    item.cover = data.cover || "";
-                                    if (data.media_type === 42) {
-                                        item.images = data.images?.map(e => ({ live_photo: true, image: e.cover, video: e.video })) ?? [];
-                                    } else {
-                                        item.images = data.images?.map(e => ({ live_photo: false, image: e, video: "" })) ?? [];
-                                    }
-
-                                } else if (task.platform === "小红书") {
-                                    item.title = data.title || data.desc || ""; item.desc = data.desc || ""; item.time = new Date(data.time);
-                                    item.type = data.type || "normal"; item.cover = data.cover || ""; item.images = data.image_list ?? [];
-                                } else if (task.platform === "快手") {
-                                    item.title = data.caption || ""; item.desc = ""; item.time = new Date(data.timestamp);
-                                    item.type = "normal"; item.cover = data.cover || "";
-                                    item.images = data.images?.map(e => ({ live_photo: false, image: e, video: "" })) ?? [];
-                                }
-                                return item;
-                            } catch (err) {
-                                console.error(`解析JSON失败 [${task.id}]:`, err);
-                                return null; // 单条失败不影响整批
-                            } finally {
-                                processCount++;
-                            }
-                        });
-
-                        // 等待当前批次的所有 JSON 解析完成
-                        const itemsToCreate = (await Promise.all(itemPromises)).filter(el => el !== null);
-
-                        // 2. 并发向 PocketBase 写入当前批次的数据
-                        const pbPromises = itemsToCreate.map(item =>
-                            pb.collection('dyxhs').create(item)
-                                .then(() => { successCount++; })
-                                .catch(err => console.error(`写入数据库失败 [${item.note_id}]:`, err))
-                        );
-
-                        // 等待当前批次全部写入 PocketBase，再进入下一个循环批次
-                        await Promise.all(pbPromises);
-                    }
-                    // =============================================================
-
-                    Swal.fire("更新完成", `添加 ${successCount} / ${updateTasks.length} 条数据！`, "success");
-                    loadNotes(true);
-                } catch (e) {
-                    console.error(e);
-                    Swal.fire("更新异常", e.message, "error");
-                } finally {
-                    Alpine.store('updating', false);
-                }
+            // 初始化 Viewer.js
+            const viewer = new Viewer(imgEl, {
+                inline: false,       // 弹窗模式
+                button: true,        // 显示右上角关闭按钮
+                navbar: false,       // 单张图片不需要底部的缩略图导航条
+                title: false,        // 不显示图片标题
+                toolbar: {           // 自定义底部工具栏按钮
+                    zoomIn: 1,
+                    zoomOut: 1,
+                    oneToOne: 1,
+                    reset: 1,
+                    prev: 0,           // 隐藏单图不需要的切换按钮
+                    play: 0,
+                    next: 0,
+                    rotateLeft: 1,
+                    rotateRight: 1,
+                    flipHorizontal: 1,
+                    flipVertical: 1,
+                },
+                // 核心功能默认开启：
+                zoomable: true,      // 支持鼠标滚轮、双指缩放
+                movable: true,       // 支持鼠标、单指拖动
+                transition: true,    // 动画过渡
             });
+
+            // 挂载到图片元素上缓存起来，防止重复创建
+            imgEl._viewer = viewer;
+            // 立刻展示
+            viewer.show();
         }
     </script>
 </body>
